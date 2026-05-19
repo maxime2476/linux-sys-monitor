@@ -90,3 +90,7 @@ Le script lit les journaux systèmes (`/var/log/auth.log`) pour surveiller les t
 ### Notifications ChatOps (Webhooks)
 Pour une réactivité immédiate, le script peut envoyer des alertes sur vos plateformes de communication (Slack, Discord, Teams) dès qu'un seuil critique est atteint.
 Pour activer cette fonctionnalité, générez un Webhook depuis votre plateforme et collez l'URL dans la variable `WEBHOOK_URL` du fichier `monitor.conf`.
+
+### Auto-Guérison (Self-Healing)
+Le script n'est plus seulement passif. Si un service critique (défini via la variable `CRITICAL_SERVICE` dans la configuration) cesse de fonctionner, le daemon tentera de le redémarrer automatiquement via `systemctl` avant d'émettre un rapport de statut via Webhook. L'intervention humaine est ainsi réduite.
+*(Note : Cette fonctionnalité requiert que le service s'exécute avec les droits root).*

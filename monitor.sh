@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# Script de surveillance système - Version 1.7 (Finale avec Webhook)
+# Script de surveillance système - Version 2.0 (Self-Healing)
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,7 +15,7 @@ else
 fi
 
 if [ "$OUTPUT_FORMAT" != "json" ]; then
-    echo "Démarrage du service de surveillance..." >> "$SCRIPT_DIR/$LOG_FILE"
+    echo "Démarrage du service de surveillance avec auto-guérison..." >> "$SCRIPT_DIR/$LOG_FILE"
 fi
 
 while true; do
@@ -29,6 +29,30 @@ while true; do
     SSH_FAILED=$(grep -c "Failed password" /var/log/auth.log 2>/dev/null)
     if [ -z "$SSH_FAILED" ]; then SSH_FAILED=0; fi
 
+    # Logique d'Auto-Guérison (Self-Healing)
+    HEALING_TRIGGERED="false"
+    HEALING_SUCCESS="false"
+    SERVICE_STATUS="unknown"
+    
+    if [ -n "$CRITICAL_SERVICE" ]; then
+        SERVICE_STATUS=$(systemctl is-active "$CRITICAL_SERVICE" 2>/dev/null)
+        
+        if [ "$SERVICE_STATUS" != "active" ] && [ "$SERVICE_STATUS" != "unknown" ]; then
+            HEALING_TRIGGERED="true"
+            # Tentative de redémarrage (le script tourne en root désormais)
+            systemctl restart "$CRITICAL_SERVICE"
+            
+            # Vérification post-redémarrage
+            NEW_STATUS=$(systemctl is-active "$CRITICAL_SERVICE" 2>/dev/null)
+            if [ "$NEW_STATUS" = "active" ]; then
+                HEALING_SUCCESS="true"
+                SERVICE_STATUS="recovered"
+            else
+                SERVICE_STATUS="failed"
+            fi
+        fi
+    fi
+
     # Gestion des alertes
     ALERT_DISK="false"
     ALERT_SSH="false"
@@ -36,19 +60,27 @@ while true; do
     if [ "$DISK_PERCENT" -gt "$DISK_THRESHOLD" ]; then ALERT_DISK="true"; fi
     if [ "$SSH_FAILED" -ge "$SSH_ALERT_THRESHOLD" ]; then ALERT_SSH="true"; fi
 
-    # Notification Réseau (Webhook Discord/Slack)
+    # Notification Réseau (Webhook) - Mise à jour avec le Self-Healing
     if [ -n "$WEBHOOK_URL" ]; then
+        MSG=""
         if [ "$ALERT_DISK" = "true" ] || [ "$ALERT_SSH" = "true" ]; then
-            # Construction du message d'alerte avec le nom de la machine (hostname)
-            MSG="🚨 **ALERTE CRITIQUE - Serveur: $(hostname)** 🚨\n- Disque critique: $ALERT_DISK\n- Brute-force SSH: $ALERT_SSH"
-            
-            # Envoi via curl (Format standard accepté par Discord)
-            curl -s -X POST -H "Content-Type: application/json" \
-                 -d "{\"content\": \"$MSG\"}" "$WEBHOOK_URL" > /dev/null
+            MSG="🚨 **ALERTE - Serveur: $(hostname)** 🚨\n- Disque: $ALERT_DISK\n- Brute-force: $ALERT_SSH"
+        fi
+        
+        if [ "$HEALING_TRIGGERED" = "true" ]; then
+            if [ "$HEALING_SUCCESS" = "true" ]; then
+                MSG="$MSG\n🛠️ **AUTO-GUÉRISON :** Le service \`$CRITICAL_SERVICE\` a crashé mais a été redémarré avec succès par le script."
+            else
+                MSG="$MSG\n🔥 **ALERTE CRITIQUE :** Le service \`$CRITICAL_SERVICE\` a crashé et le redémarrage automatique a ÉCHOUÉ."
+            fi
+        fi
+
+        if [ -n "$MSG" ]; then
+            curl -s -X POST -H "Content-Type: application/json" -d "{\"content\": \"$MSG\"}" "$WEBHOOK_URL" > /dev/null
         fi
     fi
 
-    # Format de sortie
+    # Format de sortie JSON
     if [ "$OUTPUT_FORMAT" = "json" ]; then
         JSON_PAYLOAD=$(cat <<EOF
 {
@@ -62,6 +94,12 @@ while true; do
     },
     "security": {
       "ssh_failed_attempts": $SSH_FAILED
+    },
+    "services": {
+      "target": "$CRITICAL_SERVICE",
+      "status": "$SERVICE_STATUS",
+      "healing_triggered": $HEALING_TRIGGERED,
+      "healing_success": $HEALING_SUCCESS
     }
   },
   "alerts": {
@@ -72,14 +110,17 @@ while true; do
 EOF
 )
         echo "$JSON_PAYLOAD" >> "$SCRIPT_DIR/$LOG_FILE"
-
     else
+        # Sortie Texte
         echo "---------------------------------------------------" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "Rapport de santé du système - $DATE" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "   RAM    : $RAM_USED MB / $RAM_TOTAL MB" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "   Disque : $DISK_PERCENT%" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "   Charge : $LOAD_1" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "   Sécurité: $SSH_FAILED tentatives SSH" >> "$SCRIPT_DIR/$LOG_FILE"
+        if [ -n "$CRITICAL_SERVICE" ]; then
+            echo "   Service ($CRITICAL_SERVICE) : $SERVICE_STATUS" >> "$SCRIPT_DIR/$LOG_FILE"
+        fi
         echo "" >> "$SCRIPT_DIR/$LOG_FILE"
     fi
 

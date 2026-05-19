@@ -4,13 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-# Exécution du script
 ExecStart=/home/maxime/linux-sys-monitor/monitor.sh
-# Dossier de travail
 WorkingDirectory=/home/maxime/linux-sys-monitor
-# Utilisateur qui lance le script
-User=maxime
-# Redémarrer automatiquement si le script plante
+User=root
 Restart=on-failure
 RestartSec=5
 
