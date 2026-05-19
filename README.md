@@ -51,3 +51,6 @@ Vous pouvez tester la configuration manuellement (sans l'exécuter) avec :
 \`\`\`bash
 sudo logrotate -d /etc/logrotate.d/linux-sys-monitor
 \`\`\`
+
+### Collecte robuste des métriques
+Pour garantir la stabilité du script indépendamment de la langue (locale) du système d'exploitation, la charge CPU n'est pas extraite via des utilitaires textuels de haut niveau, mais lue directement depuis le pseudo-système de fichiers du noyau (`/proc/loadavg`).
