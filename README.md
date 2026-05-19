@@ -11,6 +11,47 @@ Ce script est conçu pour offrir une surveillance basique sans avoir à déploye
 - Un système basé sur Linux ou Unix.
 - Les utilitaires standards installés (`bash`, `awk`, `free`, `df`, `uptime`).
 
+## 🏗️ Architecture du Projet
+
+```mermaid
+flowchart TD
+    %% Définition des composants
+    OS((Noyau Linux\n& Matériel))
+    Daemon[Daemon Systemd\nExécuté en Root]
+    Script{monitor.sh\nBoucle 60s}
+    
+    subgraph "Sources de Données"
+        HW[Hardware\nRAM, CPU, Disque]
+        SEC[Sécurité\nLogs SSH, FIM SHA-256]
+        NET[Réseau\nPing, Certificats SSL]
+        APP[Applicatif\nDocker API, systemctl]
+    end
+
+    subgraph "Actions & Alertes (ChatOps)"
+        Heal[Self-Healing\nRedémarrage Automatique]
+        Discord[Webhook HTTP POST\nSlack / Discord]
+    end
+
+    subgraph "Exportation & Observabilité"
+        LogFile[Historisation Locale\nsystem_health.log]
+        WebServ[Micro-serveur Python\nPort 8080]
+        Prometheus((Prometheus\nScraping Mode Pull))
+    end
+
+    %% Flux d'exécution
+    OS --> HW & SEC & NET & APP
+    HW & SEC & NET & APP -->|Extraction| Script
+    Daemon -->|Lance & Contrôle| Script
+
+    %% Logique de décision
+    Script -->|Si Service Crash| Heal
+    Script -->|Si Seuil Dépassé| Discord
+    
+    %% Export des données
+    Script -->|Génération| LogFile
+    Script -->|Écriture Atomique JSON| WebServ
+    WebServ <-.->|Requêtes HTTP GET| Prometheus```
+
 ## Installation et Usage
 
 1. Clonez le dépôt :
