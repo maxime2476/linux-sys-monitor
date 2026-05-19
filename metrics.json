@@ -1,11 +1,11 @@
 {
-  "timestamp": "2026-05-19T15:27:21+0200",
+  "timestamp": "2026-05-19T13:41:10+0000",
   "metrics": {
     "hardware": {
-      "ram_used_mb": 1086,
+      "ram_used_mb": 1085,
       "ram_total_mb": 15545,
       "disk_percent": 1,
-      "cpu_load_1m": 0.00,
+      "cpu_load_1m": 0.07,
       "cpu_temp_c": 0
     },
     "network": {
@@ -28,8 +28,8 @@
     },
     "services": {
       "target": "cron",
-      "status": "active",
-      "healing_triggered": false,
+      "status": "failed",
+      "healing_triggered": true,
       "healing_success": false
     }
   },
