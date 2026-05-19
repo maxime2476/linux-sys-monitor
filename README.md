@@ -38,3 +38,16 @@ Pour automatiser ce script afin qu'il s'exécute toutes les heures, ajoutez cett
 ### Gestion des alertes
 Le script intègre désormais un système d'alerte arithmétique. Par défaut, si l'utilisation de la partition racine `/` dépasse **80%**, une mention `[ALERTE CRITIQUE]` est automatiquement injectée dans le fichier `system_health.log`. 
 Cela permet de repérer instantanément les anomalies lors de l'analyse des journaux.
+
+### Gestion des logs (Logrotate)
+Pour éviter que le fichier `system_health.log` ne sature l'espace disque, un fichier de configuration `logrotate` est fourni. Il archive les données chaque semaine et conserve un mois d'historique compressé.
+
+Pour l'activer sur votre système, copiez (ou liez) le fichier de configuration dans le répertoire système de logrotate :
+\`\`\`bash
+sudo cp linux-sys-monitor.logrotate /etc/logrotate.d/linux-sys-monitor
+sudo chown root:root /etc/logrotate.d/linux-sys-monitor
+\`\`\`
+Vous pouvez tester la configuration manuellement (sans l'exécuter) avec :
+\`\`\`bash
+sudo logrotate -d /etc/logrotate.d/linux-sys-monitor
+\`\`\`

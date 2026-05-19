@@ -1,0 +1,8 @@
+/home/maxime/linux-sys-monitor/system_health.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+}
