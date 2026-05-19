@@ -30,3 +30,7 @@ TEMP_THRESHOLD=75
 PING_TARGET="1.1.1.1"
 # Seuil d'alerte pour la perte de paquets (en pourcentage)
 MAX_PACKET_LOSS=20
+
+# Serveur d'exportation Web (Mode Pull pour Prometheus)
+ENABLE_WEB_SERVER="true"
+WEB_PORT="8080"

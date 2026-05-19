@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# Script de surveillance système - Version 2.2 (Connectivité Réseau)
+# Script de surveillance système - Version 3.0 (Endpoint Web / Prometheus)
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,7 +21,7 @@ fi
 while true; do
     DATE=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
-    # 1. Données Matérielles
+    # Extraction
     read RAM_TOTAL RAM_USED RAM_PERCENT <<< $(free -m | awk 'NR==2{printf "%s %s %.2f", $2, $3, $3*100/$2}')
     read DISK_TOTAL DISK_USED DISK_PERCENT <<< $(df -h / | awk 'NR==2{printf "%s %s %s", $2, $3, $5}' | sed 's/%//')
     read LOAD_1 LOAD_5 LOAD_15 <<< $(cat /proc/loadavg | awk '{print $1, $2, $3}')
@@ -32,11 +32,9 @@ while true; do
         CPU_TEMP=0
     fi
 
-    # 2. Données de Sécurité
     SSH_FAILED=$(grep -c "Failed password" /var/log/auth.log 2>/dev/null)
     if [ -z "$SSH_FAILED" ]; then SSH_FAILED=0; fi
 
-    # 3. Connectivité Réseau
     if [ -n "$PING_TARGET" ]; then
         PACKET_LOSS=$(ping -c 3 -W 2 "$PING_TARGET" 2>/dev/null | grep -o '[0-9]*% packet loss' | awk -F'%' '{print $1}')
         if [ -z "$PACKET_LOSS" ]; then PACKET_LOSS=100; fi
@@ -44,7 +42,7 @@ while true; do
         PACKET_LOSS=0
     fi
 
-    # 4. Logique d'Auto-Guérison
+    # Auto-Guérison
     HEALING_TRIGGERED="false"
     HEALING_SUCCESS="false"
     SERVICE_STATUS="unknown"
@@ -64,7 +62,7 @@ while true; do
         fi
     fi
 
-    # 5. Gestion des alertes
+    # Alertes
     ALERT_DISK="false"
     ALERT_SSH="false"
     ALERT_TEMP="false"
@@ -75,19 +73,15 @@ while true; do
     if [ "$CPU_TEMP" -gt 0 ] && [ "$CPU_TEMP" -ge "$TEMP_THRESHOLD" ]; then ALERT_TEMP="true"; fi
     if [ "$PACKET_LOSS" -ge "$MAX_PACKET_LOSS" ]; then ALERT_NET="true"; fi
 
-    # 6. Notification Réseau (Webhook)
+    # Webhook Discord/Slack
     if [ -n "$WEBHOOK_URL" ]; then
         MSG=""
         if [ "$ALERT_DISK" = "true" ] || [ "$ALERT_SSH" = "true" ] || [ "$ALERT_TEMP" = "true" ] || [ "$ALERT_NET" = "true" ]; then
-            MSG="🚨 **ALERTE - Serveur: $(hostname)** 🚨\n- Disque: $ALERT_DISK\n- Brute-force: $ALERT_SSH\n- Surchauffe CPU: $ALERT_TEMP\n- Réseau Dégradé: $ALERT_NET ($PACKET_LOSS% de perte)"
+            MSG="🚨 **ALERTE - Serveur: $(hostname)** 🚨\n- Disque: $ALERT_DISK\n- SSH: $ALERT_SSH\n- CPU: $ALERT_TEMP\n- Réseau: $ALERT_NET"
         fi
         
         if [ "$HEALING_TRIGGERED" = "true" ]; then
-            if [ "$HEALING_SUCCESS" = "true" ]; then
-                MSG="$MSG\n🛠️ **AUTO-GUÉRISON :** Le service \`$CRITICAL_SERVICE\` a été redémarré avec succès."
-            else
-                MSG="$MSG\n🔥 **ALERTE CRITIQUE :** Le service \`$CRITICAL_SERVICE\` a crashé (Redémarrage ÉCHOUÉ)."
-            fi
+            if [ "$HEALING_SUCCESS" = "true" ]; then MSG="$MSG\n🛠️ **AUTO-GUÉRISON :** Le service \`$CRITICAL_SERVICE\` a été redémarré."; else MSG="$MSG\n🔥 **CRITIQUE :** Le service \`$CRITICAL_SERVICE\` a crashé (Redémarrage ÉCHOUÉ)."; fi
         fi
 
         if [ -n "$MSG" ]; then
@@ -95,9 +89,8 @@ while true; do
         fi
     fi
 
-    # 7. Format de sortie JSON
-    if [ "$OUTPUT_FORMAT" = "json" ]; then
-        JSON_PAYLOAD=$(cat <<EOF
+    # Construction de la structure de données structurée (JSON)
+    JSON_PAYLOAD=$(cat <<EOF
 {
   "timestamp": "$DATE",
   "metrics": {
@@ -131,16 +124,24 @@ while true; do
 }
 EOF
 )
+
+    # Export pour le Web Serveur (Écriture atomique sécurisée)
+    echo "$JSON_PAYLOAD" > "$SCRIPT_DIR/metrics.tmp"
+    mv "$SCRIPT_DIR/metrics.tmp" "$SCRIPT_DIR/metrics.json"
+
+    # Lancement du micro-serveur web Python s'il est activé et non démarré
+    if [ "$ENABLE_WEB_SERVER" = "true" ]; then
+        if ! pgrep -f "python3 -m http.server $WEB_PORT" > /dev/null; then
+            cd "$SCRIPT_DIR" && nohup python3 -m http.server "$WEB_PORT" > /dev/null 2>&1 &
+        fi
+    fi
+
+    # Historisation locale
+    if [ "$OUTPUT_FORMAT" = "json" ]; then
         echo "$JSON_PAYLOAD" >> "$SCRIPT_DIR/$LOG_FILE"
     else
-        # Sortie Texte
         echo "---------------------------------------------------" >> "$SCRIPT_DIR/$LOG_FILE"
-        echo "Rapport de santé du système - $DATE" >> "$SCRIPT_DIR/$LOG_FILE"
-        echo "   RAM    : $RAM_USED MB / $RAM_TOTAL MB" >> "$SCRIPT_DIR/$LOG_FILE"
-        echo "   Disque : $DISK_PERCENT%" >> "$SCRIPT_DIR/$LOG_FILE"
-        echo "   Temp CPU: $CPU_TEMP °C" >> "$SCRIPT_DIR/$LOG_FILE"
-        echo "   Réseau : $PACKET_LOSS% de perte vers $PING_TARGET" >> "$SCRIPT_DIR/$LOG_FILE"
-        echo "" >> "$SCRIPT_DIR/$LOG_FILE"
+        echo "Rapport - $DATE | RAM:$RAM_USED MB | Disque:$DISK_PERCENT% | CPU:$CPU_TEMP°C | Réseau:$PACKET_LOSS% perte" >> "$SCRIPT_DIR/$LOG_FILE"
     fi
 
     sleep "$CHECK_INTERVAL"

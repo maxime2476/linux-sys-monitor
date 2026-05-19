@@ -100,3 +100,11 @@ Conçu pour les serveurs Bare-Metal et les nano-ordinateurs (ex: Raspberry Pi), 
 
 ### Surveillance Réseau (Packet Loss)
 Vérifie la santé de la connectivité sortante du serveur en effectuant des requêtes ICMP (ping) régulières vers une cible externe définie (ex: Cloudflare 1.1.1.1). Une alerte est levée si le taux de perte de paquets dépasse le seuil toléré, signalant une coupure internet ou une saturation de la bande passante.
+
+### Point d'accès HTTP (Mode Pull / Architecture Prometheus)
+Pour une intégration native avec les systèmes de supervision modernes (Prometheus, Datadog), le script agit comme un *Node Exporter*. Il expose l'état en temps réel du système sur un serveur web local embarqué.
+Si activé dans la configuration (`ENABLE_WEB_SERVER="true"`), vous pouvez requêter les données depuis n'importe quelle machine du réseau :
+\`\`\`bash
+curl http://ip_du_serveur:8080/metrics.json
+\`\`\`
+*(Les écritures de l'état vers le serveur web sont atomiques, garantissant qu'aucune lecture corrompue ne peut survenir).*
