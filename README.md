@@ -86,3 +86,7 @@ Pour faciliter l'ingestion des logs par des outils tiers (ELK, Datadog), le scri
 
 ### Audit de sécurité
 Le script lit les journaux systèmes (`/var/log/auth.log`) pour surveiller les tentatives de connexion SSH échouées. Si le seuil configuré (`SSH_ALERT_THRESHOLD`) est dépassé, une alerte spécifique est déclenchée.
+
+### Notifications ChatOps (Webhooks)
+Pour une réactivité immédiate, le script peut envoyer des alertes sur vos plateformes de communication (Slack, Discord, Teams) dès qu'un seuil critique est atteint.
+Pour activer cette fonctionnalité, générez un Webhook depuis votre plateforme et collez l'URL dans la variable `WEBHOOK_URL` du fichier `monitor.conf`.
