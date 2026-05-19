@@ -5,8 +5,8 @@ services:
     restart: always
     volumes:
       - .:/app
-      - /var/log/auth.log:/var/log/auth.log:ro  # Lecture des logs SSH hôte
-      - /sys/class/thermal:/sys/class/thermal:ro # Lecture température
+      - /var/log/auth.log:/var/log/auth.log:ro  # host SSH logs
+      - /sys/class/thermal:/sys/class/thermal:ro # CPU temperature sensors
     ports:
       - "8080:8080"
-    privileged: true # Nécessaire pour le contrôle systemd/processus
+    privileged: true # required for dmesg and Docker socket access

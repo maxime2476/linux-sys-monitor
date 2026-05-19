@@ -1,5 +1,5 @@
 [Unit]
-Description=Service de Surveillance Systeme Linux
+Description=Linux System Monitor
 After=network.target
 
 [Service]

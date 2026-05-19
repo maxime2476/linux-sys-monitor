@@ -1,186 +1,211 @@
 ![ShellCheck](https://github.com/maxime2476/linux-sys-monitor/actions/workflows/shellcheck.yml/badge.svg)
 
-# Linux System Monitor
+# linux-sys-monitor
 
-Un outil en ligne de commande léger (Bash) pour surveiller la santé d'un système Linux. Il enregistre l'utilisation de la RAM, du disque et la charge CPU dans un fichier journal.
+A bash daemon that monitors a Linux server's health and sends alerts to Discord/Slack via webhook. Designed for bare-metal servers and VPS instances — no external dependencies beyond standard Unix utilities.
 
-## Pourquoi ce projet ?
-Ce script est conçu pour offrir une surveillance basique sans avoir à déployer des solutions lourdes comme Prometheus ou Zabbix. Idéal pour des serveurs personnels ou des Raspberry Pi.
+The script runs in a loop (default every 60s), collects metrics, writes them as JSON to disk, and fires webhook notifications when thresholds are breached.
 
-## Prérequis
-- Un système basé sur Linux ou Unix.
-- Les utilitaires standards installés (`bash`, `awk`, `free`, `df`, `uptime`).
+## Architecture
 
-## 🏗️ Architecture du Projet
+```
+monitor.sh (main loop, 60s interval)
+├── Hardware: RAM, disk, CPU load, temperature
+├── Security: SSH failed logins, file integrity (SHA-256)
+├── Network: packet loss via ping, SSL cert expiry
+├── Application: Docker container health, systemd service self-healing
+├── Output: metrics.json (atomic write via tmp file)
+├── Web server: python3 -m http.server (optional, port 8080)
+└── Alerts: webhook POST (Discord/Slack, 5-min throttle)
+```
 
 ```mermaid
 flowchart TD
-    %% Définition des composants
-    OS((Noyau Linux\n& Matériel))
-    Daemon[Daemon Systemd\nExécuté en Root]
-    Script{monitor.sh\nBoucle 60s}
-    
-    subgraph "Sources de Données"
-        HW[Hardware\nRAM, CPU, Disque]
-        SEC[Sécurité\nLogs SSH, FIM SHA-256]
-        NET[Réseau\nPing, Certificats SSL]
-        APP[Applicatif\nDocker API, systemctl]
+    OS((Linux host))
+    Script{monitor.sh\n60s loop}
+
+    subgraph Sources
+        HW[Hardware\nRAM, CPU, disk, temp]
+        SEC[Security\nSSH logs, FIM SHA-256]
+        NET[Network\nping, SSL certs]
+        APP[Application\nDocker, systemd]
     end
 
-    subgraph "Actions & Alertes (ChatOps)"
-        Heal[Self-Healing\nRedémarrage Automatique]
-        Discord[Webhook HTTP POST\nSlack / Discord]
+    subgraph Outputs
+        JSON[metrics.json\natomic write]
+        HTTP[HTTP :8080\npull endpoint]
+        Webhook[Discord/Slack\nwebhook POST]
+        Log[system_health.log\nlocal history]
     end
 
-    subgraph "Exportation & Observabilité"
-        LogFile[Historisation Locale\nsystem_health.log]
-        WebServ[Micro-serveur Python\nPort 8080]
-        Prometheus((Prometheus\nScraping Mode Pull))
-    end
-
-    %% Flux d'exécution
     OS --> HW & SEC & NET & APP
-    HW & SEC & NET & APP -->|Extraction| Script
-    Daemon -->|Lance & Contrôle| Script
-
-    %% Logique de décision
-    Script -->|Si Service Crash| Heal
-    Script -->|Si Seuil Dépassé| Discord
-    
-    %% Export des données
-    Script -->|Génération| LogFile
-    Script -->|Écriture Atomique JSON| WebServ
-    WebServ <-.->|Requêtes HTTP GET| Prometheus
-
+    HW & SEC & NET & APP --> Script
+    Script --> JSON --> HTTP
+    Script --> Webhook
+    Script --> Log
 ```
 
-## 🚀 Installation et Usage
+## Setup
 
-L'installation est automatisée via un Makefile :
+### Bare-metal / VPS (systemd)
 
-1. Clonez le dépôt :
-   ```bash
-   git clone [https://github.com/maxime2476/linux-sys-monitor.git](https://github.com/maxime2476/linux-sys-monitor.git)
-   cd linux-sys-monitor
-   ```
-
-2. Installez le service :
-   ```bash
-   sudo make install
-   ```
-
-3. Commandes utiles :
-
-   Redémarrer le service :
-   ```bash
-   sudo make restart
-   ```
-	
-   Désinstaller le service :
-   ```bash
-   sudo make uninstall
-   ```
-
-## Automatisation (Cron)
-Pour automatiser ce script afin qu'il s'exécute toutes les heures, ajoutez cette ligne à votre crontab (`crontab -e`) :
 ```bash
-0 * * * * /chemin/absolu/vers/linux-sys-monitor/monitor.sh
+git clone https://github.com/maxime2476/linux-sys-monitor.git
+cd linux-sys-monitor
+cp monitor.conf.example monitor.conf
+# edit monitor.conf with your values
+sudo make install
 ```
 
-## Installation en tant que Service (Systemd)
+Check status:
 
-Pour que le script tourne en continu en tâche de fond et survive aux redémarrages du serveur :
+```bash
+sudo systemctl status linux-sys-monitor
+sudo journalctl -u linux-sys-monitor -f
+```
 
-1. Créez un lien symbolique de l'unité systemd vers le système :
-   ```bash
-   sudo ln -s /home/maxime/linux-sys-monitor/linux-sys-monitor.service /etc/systemd/system/
-   ```
+### Docker
 
-2. Rechargez les configurations systemd :
-   ```bash
-   sudo systemctl daemon-reload
-   ```
+```bash
+cp monitor.conf.example monitor.conf
+# edit monitor.conf
+docker compose up -d
+```
 
-3. Activez (démarrage automatique) et lancez le service :
-   ```bash
-   sudo systemctl enable linux-sys-monitor.service
-   sudo systemctl start linux-sys-monitor.service
-   ```
+The compose file mounts the current directory into the container, so `monitor.conf` on the host is used. The web endpoint is exposed on port 8080.
 
-4. Vérifiez l'état du service :
-   ```bash
-   sudo systemctl status linux-sys-monitor.service
-   ```
+To use the pre-built image from GHCR:
 
-## Fonctionnalités avancées
+```bash
+docker pull ghcr.io/maxime2476/linux-sys-monitor:latest
+docker run -d --privileged \
+  -v $(pwd)/monitor.conf:/app/monitor.conf \
+  -p 8080:8080 \
+  ghcr.io/maxime2476/linux-sys-monitor:latest
+```
 
-### Gestion des alertes
-Le script intègre désormais un système d'alerte arithmétique. Par défaut, si l'utilisation de la partition racine `/` dépasse **80%**, une mention `[ALERTE CRITIQUE]` est automatiquement injectée dans le fichier `system_health.log`. 
-Cela permet de repérer instantanément les anomalies lors de l'analyse des journaux.
+## Configuration
 
-### Gestion des logs (Logrotate)
-Pour éviter que le fichier `system_health.log` ne sature l'espace disque, un fichier de configuration `logrotate` est fourni. Il archive les données chaque semaine et conserve un mois d'historique compressé.
+Copy `monitor.conf.example` to `monitor.conf` and edit:
 
-Pour l'activer sur votre système, copiez (ou liez) le fichier de configuration dans le répertoire système de logrotate :
+| Variable | Description | Default |
+|---|---|---|
+| `CHECK_INTERVAL` | Loop interval in seconds | `60` |
+| `LOG_FILE` | Log filename | `system_health.log` |
+| `OUTPUT_FORMAT` | `text` or `json` | `json` |
+| `DISK_THRESHOLD` | Disk alert threshold (%) | `80` |
+| `SSH_ALERT_THRESHOLD` | Failed SSH logins before alert | `5` |
+| `TEMP_THRESHOLD` | CPU temp alert threshold (°C) | `75` |
+| `WEBHOOK_URL` | Discord/Slack webhook URL | *(empty = disabled)* |
+| `CRITICAL_SERVICE` | systemd service to watch + restart | *(empty = disabled)* |
+| `PING_TARGET` | Host to ping for network check | `1.1.1.1` |
+| `MAX_PACKET_LOSS` | Packet loss alert threshold (%) | `20` |
+| `ENABLE_WEB_SERVER` | Start HTTP server for metrics pull | `true` |
+| `WEB_PORT` | HTTP server port | `8080` |
+| `FIM_TARGETS` | Space-separated files to hash-check | `/etc/passwd /etc/ssh/sshd_config` |
+| `SSL_DOMAINS` | Space-separated domains to check | *(empty = disabled)* |
+| `SSL_DAYS_THRESHOLD` | Alert if cert expires within N days | `15` |
+| `CHECK_DOCKER` | Monitor stopped/dead containers | `true` |
+
+## Alert system
+
+Alerts are sent as a single batched webhook message per cycle. The notification is **throttled to at most once every 5 minutes** regardless of how many thresholds are breached.
+
+Alert types:
+- Disk above threshold
+- SSH brute-force attempts
+- CPU overheat
+- Packet loss / network degradation
+- File integrity change (FIM)
+- OOM-killer event in dmesg
+- SSL certificate expiring soon
+- Docker container exited/dead
+- systemd service crash + auto-restart result
+
+The self-healing check (`CRITICAL_SERVICE`) is a **systemd-only feature**. When running in Docker, `systemctl` is unavailable and this check is skipped automatically — it won't generate false alerts.
+
+## Metrics endpoint
+
+When `ENABLE_WEB_SERVER=true`, the script starts a local Python HTTP server on `WEB_PORT`. The current state is available at:
+
+```bash
+curl http://localhost:8080/metrics.json
+```
+
+Writes to `metrics.json` are atomic (write to `.tmp`, then `mv`), so partial reads are not possible.
+
+Sample output:
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00+0100",
+  "metrics": {
+    "hardware": { "ram_used_mb": 512, "ram_total_mb": 2048, "disk_percent": 45, ... },
+    "security": { "ssh_failed_attempts": 2, "fim_alert": false, ... },
+    "services": { "target": "nginx", "status": "active", "healing_triggered": false, ... }
+  },
+  "alerts": { "disk_critical": false, "ssh_bruteforce": false, ... }
+}
+```
+
+## Grafana
+
+Import `dashboards/grafana-dashboard.json` into your Grafana instance. The dashboard reads from the metrics endpoint — configure a JSON datasource pointing to `http://<host>:8080/metrics.json`.
+
+## Log rotation
+
 ```bash
 sudo cp linux-sys-monitor.logrotate /etc/logrotate.d/linux-sys-monitor
 sudo chown root:root /etc/logrotate.d/linux-sys-monitor
-```
-Vous pouvez tester la configuration manuellement (sans l'exécuter) avec :
-```bash
+# test without rotating:
 sudo logrotate -d /etc/logrotate.d/linux-sys-monitor
 ```
 
-### Collecte robuste des métriques
-Pour garantir la stabilité du script indépendamment de la langue (locale) du système d'exploitation, la charge CPU n'est pas extraite via des utilitaires textuels de haut niveau, mais lue directement depuis le pseudo-système de fichiers du noyau (`/proc/loadavg`).
+Rotates weekly, keeps 4 weeks of compressed history.
 
-### Export de données structurées (JSON)
-Pour faciliter l'ingestion des logs par des outils tiers (ELK, Datadog), le script supporte un mode d'export natif en JSON. Modifiez la variable `OUTPUT_FORMAT="json"` dans le fichier `monitor.conf` pour activer ce mode. Les données respecteront une structure stricte avec horodatage ISO 8601.
+## Makefile
 
-### Audit de sécurité
-Le script lit les journaux systèmes (`/var/log/auth.log`) pour surveiller les tentatives de connexion SSH échouées. Si le seuil configuré (`SSH_ALERT_THRESHOLD`) est dépassé, une alerte spécifique est déclenchée.
-
-### Notifications ChatOps (Webhooks)
-Pour une réactivité immédiate, le script peut envoyer des alertes sur vos plateformes de communication (Slack, Discord, Teams) dès qu'un seuil critique est atteint.
-Pour activer cette fonctionnalité, générez un Webhook depuis votre plateforme et collez l'URL dans la variable `WEBHOOK_URL` du fichier `monitor.conf`.
-
-### Auto-Guérison (Self-Healing)
-Le script n'est plus seulement passif. Si un service critique (défini via la variable `CRITICAL_SERVICE` dans la configuration) cesse de fonctionner, le daemon tentera de le redémarrer automatiquement via `systemctl` avant d'émettre un rapport de statut via Webhook. L'intervention humaine est ainsi réduite.
-*(Note : Cette fonctionnalité requiert que le service s'exécute avec les droits root).*
-
-### Surveillance Thermique (Hardware)
-Conçu pour les serveurs Bare-Metal et les nano-ordinateurs (ex: Raspberry Pi), le script lit les capteurs du système de fichiers virtuel (`/sys/class/thermal`) pour surveiller la température matérielle du processeur et alerter en cas de risque de thermal throttling.
-
-### Surveillance Réseau (Packet Loss)
-Vérifie la santé de la connectivité sortante du serveur en effectuant des requêtes ICMP (ping) régulières vers une cible externe définie (ex: Cloudflare 1.1.1.1). Une alerte est levée si le taux de perte de paquets dépasse le seuil toléré, signalant une coupure internet ou une saturation de la bande passante.
-
-### Point d'accès HTTP (Mode Pull / Architecture Prometheus)
-Pour une intégration native avec les systèmes de supervision modernes (Prometheus, Datadog), le script agit comme un *Node Exporter*. Il expose l'état en temps réel du système sur un serveur web local embarqué.
-Si activé dans la configuration (`ENABLE_WEB_SERVER="true"`), vous pouvez requêter les données depuis n'importe quelle machine du réseau :
 ```bash
-curl http://ip_du_serveur:8080/metrics.json
+sudo make install     # deploy systemd service and start it
+sudo make restart     # restart the systemd service
+sudo make uninstall   # stop, disable, and remove the service
 ```
-*(Les écritures de l'état vers le serveur web sont atomiques, garantissant qu'aucune lecture corrompue ne peut survenir).*
 
-### File Integrity Monitoring (FIM)
-Le daemon embarque un moteur de détection d'intrusion basé sur l'hôte (HIDS). Au démarrage, il calcule les empreintes cryptographiques (SHA-256) des fichiers sensibles définis dans `FIM_TARGETS` (ex: `/etc/passwd`). Si une altération non autorisée est détectée durant le cycle d'exécution, une alerte critique de violation d'intégrité est levée.
+## CI
 
-### Analyse Post-Mortem du Noyau (OOM-Killer)
-Pour contrer les fuites de mémoire furtives qui s'effondrent avant le cycle de vérification, le daemon analyse le tampon de messages du noyau (`dmesg`). Toute intervention de l'OOM-Killer (destruction d'un processus due à une saturation de la RAM) est immédiatement comptabilisée et signalée.
+GitHub Actions runs ShellCheck on every push/PR to `main`. Docker image is built and pushed to GHCR on every push to `main`.
 
-### Anticipation d'expiration SSL/TLS
-La péremption d'un certificat HTTPS étant une cause majeure de panne de production, le daemon agit comme un client asynchrone. Il interroge via `openssl` les serveurs web définis dans `SSL_DOMAINS`. Il analyse l'empreinte cryptographique X.509 pour calculer la durée de vie restante du certificat. Une alerte réseau est déclenchée automatiquement si la limite (définie par `SSL_DAYS_THRESHOLD`) est franchie.
+## Troubleshooting
 
-### Observabilité des Micro-services (Docker)
-L'outil s'intègre avec les environnements conteneurisés. S'il détecte la présence du démon Docker (`CHECK_DOCKER="true"`), il interroge l'API locale pour identifier les conteneurs qui ont quitté inopinément ou qui sont dans un état "dead". Les noms des conteneurs impactés sont directement remontés dans la charge utile JSON et via les Webhooks ChatOps.
+**Alerts firing immediately on startup:**
+Check that `LAST_ALERT` in the script is working. If you see alerts on the very first cycle, the thresholds in `monitor.conf` may be too low for your system's baseline.
 
-### 📊 Visualisation (Grafana)
-Ce projet inclut un template de Dashboard Grafana (`dashboards/grafana-dashboard.json`). Il permet de visualiser instantanément les métriques collectées par le script. Il suffit d'importer ce fichier JSON dans une instance Grafana pour obtenir une interface de contrôle complète de votre serveur Linux.
+**Self-healing always triggering in Docker:**
+`CRITICAL_SERVICE` should be left empty when running in Docker — systemd is not available inside the container. This was a known bug (fixed): empty output from `systemctl` is now treated as "unknown" and skips the healing logic.
 
-### 🐳 Installation via Docker
-L'image est construite automatiquement et disponible sur Docker Hub :
+**No metrics.json file:**
+The script requires a valid `monitor.conf` at startup or it exits immediately. Verify the config is mounted/present.
+
+**HTTP server not responding:**
+Check that `ENABLE_WEB_SERVER=true` and the port is not already in use. The Python HTTP server is started once and monitored with `pgrep`; if it dies, it's restarted on the next cycle.
+
+## Local testing
 
 ```bash
-docker pull VOTRE_PSEUDO/linux-sys-monitor:latest
-docker run -d --privileged VOTRE_PSEUDO/linux-sys-monitor:latest
+# Run one-shot with a test config
+CHECK_INTERVAL=0 bash monitor.sh
+
+# Watch the metrics file update
+watch -n 2 cat metrics.json
+
+# Trigger a disk alert manually (if threshold allows)
+DISK_THRESHOLD=1 bash monitor.sh
+
+# Simulate a service being down (bare-metal only)
+sudo systemctl stop your-service
+# watch the log for healing attempt
+
+# Test webhook manually
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"content": "test alert"}' "$WEBHOOK_URL"
 ```

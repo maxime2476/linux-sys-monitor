@@ -1,47 +1,47 @@
 # ==========================================================
-# Configuration de linux-sys-monitor
+# linux-sys-monitor configuration
 # ==========================================================
 
-# Nom du fichier journal (ex: system_health.log ou system_health.json)
+# Log filename
 LOG_FILE="system_health.log"
 
-# Seuil d'alerte critique pour l'espace disque (en pourcentage)
+# Disk usage alert threshold (percent)
 DISK_THRESHOLD=80
 
-# Fréquence de vérification en secondes
+# Check interval in seconds
 CHECK_INTERVAL=60
 
-# Format de sortie : "text" ou "json"
+# Output format: "text" or "json"
 OUTPUT_FORMAT="json"
 
-# Seuil d'alerte critique pour les tentatives SSH échouées
+# Failed SSH login alert threshold
 SSH_ALERT_THRESHOLD=5
 
-# URL du Webhook (Discord/Slack). Laissez vide pour désactiver les alertes réseaux.
-WEBHOOK_URL="VOTRE_LIEN_DISCORD_ICI"
+# Webhook URL (Discord/Slack). Leave empty to disable notifications.
+WEBHOOK_URL=""
 
-# Service critique à surveiller et redémarrer en cas de crash
-CRITICAL_SERVICE="nom_du_service_ici"
+# Service to monitor and auto-restart on crash (systemd only, leave empty in Docker)
+CRITICAL_SERVICE=""
 
-# Température critique du CPU en degrés Celsius
+# CPU temperature alert threshold (Celsius)
 TEMP_THRESHOLD=75
 
-# Surveillance Réseau (Ping)
+# Network check target (ping)
 PING_TARGET="1.1.1.1"
-# Seuil d'alerte pour la perte de paquets (en pourcentage)
+# Packet loss alert threshold (percent)
 MAX_PACKET_LOSS=20
 
-# Serveur d'exportation Web (Mode Pull pour Prometheus)
+# Web export server (pull mode for Prometheus)
 ENABLE_WEB_SERVER="true"
 WEB_PORT="8080"
 
-# Fichiers critiques à surveiller (File Integrity Monitoring)
+# Files to monitor for integrity changes (space-separated)
 FIM_TARGETS="/etc/passwd /etc/ssh/sshd_config"
 
-# Noms de domaine à surveiller pour l'expiration SSL (séparés par un espace)
+# Domains to check for SSL certificate expiry (space-separated)
 SSL_DOMAINS="google.com github.com"
-# Seuil d'alerte en jours restants
+# Alert threshold in days remaining
 SSL_DAYS_THRESHOLD=15
 
-# Activer la surveillance des conteneurs Docker (true/false)
+# Monitor stopped/dead Docker containers (true/false)
 CHECK_DOCKER="true"
