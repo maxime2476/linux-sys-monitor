@@ -97,3 +97,6 @@ Le script n'est plus seulement passif. Si un service critique (défini via la va
 
 ### Surveillance Thermique (Hardware)
 Conçu pour les serveurs Bare-Metal et les nano-ordinateurs (ex: Raspberry Pi), le script lit les capteurs du système de fichiers virtuel (`/sys/class/thermal`) pour surveiller la température matérielle du processeur et alerter en cas de risque de thermal throttling.
+
+### Surveillance Réseau (Packet Loss)
+Vérifie la santé de la connectivité sortante du serveur en effectuant des requêtes ICMP (ping) régulières vers une cible externe définie (ex: Cloudflare 1.1.1.1). Une alerte est levée si le taux de perte de paquets dépasse le seuil toléré, signalant une coupure internet ou une saturation de la bande passante.

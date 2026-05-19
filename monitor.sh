@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# Script de surveillance système - Version 2.1 (Surveillance Thermique)
+# Script de surveillance système - Version 2.2 (Connectivité Réseau)
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,22 +21,30 @@ fi
 while true; do
     DATE=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
-    # Extraction des données classiques
+    # 1. Données Matérielles
     read RAM_TOTAL RAM_USED RAM_PERCENT <<< $(free -m | awk 'NR==2{printf "%s %s %.2f", $2, $3, $3*100/$2}')
     read DISK_TOTAL DISK_USED DISK_PERCENT <<< $(df -h / | awk 'NR==2{printf "%s %s %s", $2, $3, $5}' | sed 's/%//')
     read LOAD_1 LOAD_5 LOAD_15 <<< $(cat /proc/loadavg | awk '{print $1, $2, $3}')
     
-    SSH_FAILED=$(grep -c "Failed password" /var/log/auth.log 2>/dev/null)
-    if [ -z "$SSH_FAILED" ]; then SSH_FAILED=0; fi
-
-    # Extraction de la température CPU (gestion des environnements virtualisés comme WSL)
     if [ -f /sys/class/thermal/thermal_zone0/temp ]; then
         CPU_TEMP=$(( $(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null) / 1000 ))
     else
-        CPU_TEMP=0 # Capteur indisponible
+        CPU_TEMP=0
     fi
 
-    # Logique d'Auto-Guérison
+    # 2. Données de Sécurité
+    SSH_FAILED=$(grep -c "Failed password" /var/log/auth.log 2>/dev/null)
+    if [ -z "$SSH_FAILED" ]; then SSH_FAILED=0; fi
+
+    # 3. Connectivité Réseau
+    if [ -n "$PING_TARGET" ]; then
+        PACKET_LOSS=$(ping -c 3 -W 2 "$PING_TARGET" 2>/dev/null | grep -o '[0-9]*% packet loss' | awk -F'%' '{print $1}')
+        if [ -z "$PACKET_LOSS" ]; then PACKET_LOSS=100; fi
+    else
+        PACKET_LOSS=0
+    fi
+
+    # 4. Logique d'Auto-Guérison
     HEALING_TRIGGERED="false"
     HEALING_SUCCESS="false"
     SERVICE_STATUS="unknown"
@@ -56,27 +64,29 @@ while true; do
         fi
     fi
 
-    # Gestion des alertes
+    # 5. Gestion des alertes
     ALERT_DISK="false"
     ALERT_SSH="false"
     ALERT_TEMP="false"
+    ALERT_NET="false"
     
     if [ "$DISK_PERCENT" -gt "$DISK_THRESHOLD" ]; then ALERT_DISK="true"; fi
     if [ "$SSH_FAILED" -ge "$SSH_ALERT_THRESHOLD" ]; then ALERT_SSH="true"; fi
     if [ "$CPU_TEMP" -gt 0 ] && [ "$CPU_TEMP" -ge "$TEMP_THRESHOLD" ]; then ALERT_TEMP="true"; fi
+    if [ "$PACKET_LOSS" -ge "$MAX_PACKET_LOSS" ]; then ALERT_NET="true"; fi
 
-    # Notification Réseau (Webhook)
+    # 6. Notification Réseau (Webhook)
     if [ -n "$WEBHOOK_URL" ]; then
         MSG=""
-        if [ "$ALERT_DISK" = "true" ] || [ "$ALERT_SSH" = "true" ] || [ "$ALERT_TEMP" = "true" ]; then
-            MSG="🚨 **ALERTE - Serveur: $(hostname)** 🚨\n- Disque: $ALERT_DISK\n- Brute-force: $ALERT_SSH\n- Surchauffe CPU: $ALERT_TEMP (${CPU_TEMP}°C)"
+        if [ "$ALERT_DISK" = "true" ] || [ "$ALERT_SSH" = "true" ] || [ "$ALERT_TEMP" = "true" ] || [ "$ALERT_NET" = "true" ]; then
+            MSG="🚨 **ALERTE - Serveur: $(hostname)** 🚨\n- Disque: $ALERT_DISK\n- Brute-force: $ALERT_SSH\n- Surchauffe CPU: $ALERT_TEMP\n- Réseau Dégradé: $ALERT_NET ($PACKET_LOSS% de perte)"
         fi
         
         if [ "$HEALING_TRIGGERED" = "true" ]; then
             if [ "$HEALING_SUCCESS" = "true" ]; then
                 MSG="$MSG\n🛠️ **AUTO-GUÉRISON :** Le service \`$CRITICAL_SERVICE\` a été redémarré avec succès."
             else
-                MSG="$MSG\n🔥 **ALERTE CRITIQUE :** Le service \`$CRITICAL_SERVICE\` a crashé (Redémarrage automatique ÉCHOUÉ)."
+                MSG="$MSG\n🔥 **ALERTE CRITIQUE :** Le service \`$CRITICAL_SERVICE\` a crashé (Redémarrage ÉCHOUÉ)."
             fi
         fi
 
@@ -85,7 +95,7 @@ while true; do
         fi
     fi
 
-    # Format de sortie JSON
+    # 7. Format de sortie JSON
     if [ "$OUTPUT_FORMAT" = "json" ]; then
         JSON_PAYLOAD=$(cat <<EOF
 {
@@ -97,6 +107,10 @@ while true; do
       "disk_percent": $DISK_PERCENT,
       "cpu_load_1m": $LOAD_1,
       "cpu_temp_c": $CPU_TEMP
+    },
+    "network": {
+      "target": "$PING_TARGET",
+      "packet_loss_percent": $PACKET_LOSS
     },
     "security": {
       "ssh_failed_attempts": $SSH_FAILED
@@ -111,7 +125,8 @@ while true; do
   "alerts": {
     "disk_critical": $ALERT_DISK,
     "ssh_bruteforce": $ALERT_SSH,
-    "cpu_overheat": $ALERT_TEMP
+    "cpu_overheat": $ALERT_TEMP,
+    "network_degraded": $ALERT_NET
   }
 }
 EOF
@@ -123,12 +138,8 @@ EOF
         echo "Rapport de santé du système - $DATE" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "   RAM    : $RAM_USED MB / $RAM_TOTAL MB" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "   Disque : $DISK_PERCENT%" >> "$SCRIPT_DIR/$LOG_FILE"
-        echo "   Charge : $LOAD_1" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "   Temp CPU: $CPU_TEMP °C" >> "$SCRIPT_DIR/$LOG_FILE"
-        echo "   Sécurité: $SSH_FAILED tentatives SSH" >> "$SCRIPT_DIR/$LOG_FILE"
-        if [ -n "$CRITICAL_SERVICE" ]; then
-            echo "   Service ($CRITICAL_SERVICE) : $SERVICE_STATUS" >> "$SCRIPT_DIR/$LOG_FILE"
-        fi
+        echo "   Réseau : $PACKET_LOSS% de perte vers $PING_TARGET" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "" >> "$SCRIPT_DIR/$LOG_FILE"
     fi
 

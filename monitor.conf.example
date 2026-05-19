@@ -20,7 +20,13 @@ SSH_ALERT_THRESHOLD=5
 # URL du Webhook (Discord/Slack). Laissez vide pour désactiver les alertes réseaux.
 WEBHOOK_URL="VOTRE_LIEN_DISCORD_ICI"
 
+# Service critique à surveiller et redémarrer en cas de crash
 CRITICAL_SERVICE="nom_du_service_ici"
 
 # Température critique du CPU en degrés Celsius
 TEMP_THRESHOLD=75
+
+# Surveillance Réseau (Ping)
+PING_TARGET="1.1.1.1"
+# Seuil d'alerte pour la perte de paquets (en pourcentage)
+MAX_PACKET_LOSS=20
