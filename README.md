@@ -1,4 +1,8 @@
 ![ShellCheck](https://github.com/maxime2476/linux-sys-monitor/actions/workflows/shellcheck.yml/badge.svg)
+![Docker](https://github.com/maxime2476/linux-sys-monitor/actions/workflows/docker-publish.yml/badge.svg)
+[![Image on GHCR](https://img.shields.io/badge/ghcr.io-linux--sys--monitor-blue?logo=docker)](https://ghcr.io/maxime2476/linux-sys-monitor)
+![Last commit](https://img.shields.io/github/last-commit/maxime2476/linux-sys-monitor)
+![License](https://img.shields.io/github/license/maxime2476/linux-sys-monitor)
 
 # linux-sys-monitor
 
