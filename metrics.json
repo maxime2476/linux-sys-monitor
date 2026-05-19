@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-05-19T12:24:29+0000",
+  "metrics": {
+    "hardware": {
+      "ram_used_mb": 1065,
+      "ram_total_mb": 15545,
+      "disk_percent": 1,
+      "cpu_load_1m": 0.00,
+      "cpu_temp_c": 0
+    },
+    "network": {
+      "target": "1.1.1.1",
+      "packet_loss_percent": 0
+    },
+    "security": {
+      "ssh_failed_attempts": 0,
+      "fim_alert": false,
+      "fim_modified_files": "",
+      "ssl_alert": false,
+      "ssl_expiring": ""
+    },
+    "kernel": {
+      "oom_killer_events": 0,
+      "oom_alert": false
+    },
+    "docker": {
+      "crashed_containers": ""
+    },
+    "services": {
+      "target": "cron",
+      "status": "failed",
+      "healing_triggered": true,
+      "healing_success": false
+    }
+  },
+  "alerts": {
+    "disk_critical": false,
+    "ssh_bruteforce": false,
+    "cpu_overheat": false,
+    "network_degraded": false,
+    "file_integrity_compromised": false,
+    "kernel_oom_triggered": false,
+    "ssl_certificate_expiring": false,
+    "docker_container_crashed": false
+  }
+}

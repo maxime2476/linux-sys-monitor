@@ -176,3 +176,11 @@ L'outil s'intègre avec les environnements conteneurisés. S'il détecte la pré
 
 ### 📊 Visualisation (Grafana)
 Ce projet inclut un template de Dashboard Grafana (`dashboards/grafana-dashboard.json`). Il permet de visualiser instantanément les métriques collectées par le script. Il suffit d'importer ce fichier JSON dans une instance Grafana pour obtenir une interface de contrôle complète de votre serveur Linux.
+
+### 🐳 Installation via Docker
+L'image est construite automatiquement et disponible sur Docker Hub :
+
+```bash
+docker pull VOTRE_PSEUDO/linux-sys-monitor:latest
+docker run -d --privileged VOTRE_PSEUDO/linux-sys-monitor:latest
+```

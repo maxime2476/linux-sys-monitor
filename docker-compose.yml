@@ -1,0 +1,12 @@
+services:
+  sys-monitor:
+    build: .
+    container_name: linux-sys-monitor
+    restart: always
+    volumes:
+      - .:/app
+      - /var/log/auth.log:/var/log/auth.log:ro  # Lecture des logs SSH hôte
+      - /sys/class/thermal:/sys/class/thermal:ro # Lecture température
+    ports:
+      - "8080:8080"
+    privileged: true # Nécessaire pour le contrôle systemd/processus
