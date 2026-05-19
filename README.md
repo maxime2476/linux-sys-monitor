@@ -32,3 +32,9 @@ Pour automatiser ce script afin qu'il s'exécute toutes les heures, ajoutez cett
 \`\`\`bash
 0 * * * * /chemin/absolu/vers/linux-sys-monitor/monitor.sh
 \`\`\`
+
+## Fonctionnalités avancées
+
+### Gestion des alertes
+Le script intègre désormais un système d'alerte arithmétique. Par défaut, si l'utilisation de la partition racine `/` dépasse **80%**, une mention `[ALERTE CRITIQUE]` est automatiquement injectée dans le fichier `system_health.log`. 
+Cela permet de repérer instantanément les anomalies lors de l'analyse des journaux.
