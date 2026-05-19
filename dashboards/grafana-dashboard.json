@@ -1,0 +1,20 @@
+{
+  "title": "Linux System Monitor Dashboard",
+  "panels": [
+    {
+      "title": "Utilisation RAM",
+      "type": "gauge",
+      "targets": [{ "target": "metrics.hardware.ram_used_mb" }]
+    },
+    {
+      "title": "Température CPU",
+      "type": "graph",
+      "targets": [{ "target": "metrics.hardware.cpu_temp_c" }]
+    },
+    {
+      "title": "Alertes FIM",
+      "type": "stat",
+      "targets": [{ "target": "alerts.file_integrity_compromised" }]
+    }
+  ]
+}

@@ -70,15 +70,16 @@ L'installation est automatisée via un Makefile :
    ```
 
 3. Commandes utiles :
+
    Redémarrer le service :
-   	```bash
-   	sudo make restart
-   	```
+   ```bash
+   sudo make restart
+   ```
 	
    Désinstaller le service :
-	```bash
-        sudo make uninstall
-        ```
+   ```bash
+   sudo make uninstall
+   ```
 
 ## Automatisation (Cron)
 Pour automatiser ce script afin qu'il s'exécute toutes les heures, ajoutez cette ligne à votre crontab (`crontab -e`) :
@@ -172,3 +173,6 @@ La péremption d'un certificat HTTPS étant une cause majeure de panne de produc
 
 ### Observabilité des Micro-services (Docker)
 L'outil s'intègre avec les environnements conteneurisés. S'il détecte la présence du démon Docker (`CHECK_DOCKER="true"`), il interroge l'API locale pour identifier les conteneurs qui ont quitté inopinément ou qui sont dans un état "dead". Les noms des conteneurs impactés sont directement remontés dans la charge utile JSON et via les Webhooks ChatOps.
+
+### 📊 Visualisation (Grafana)
+Ce projet inclut un template de Dashboard Grafana (`dashboards/grafana-dashboard.json`). Il permet de visualiser instantanément les métriques collectées par le script. Il suffit d'importer ce fichier JSON dans une instance Grafana pour obtenir une interface de contrôle complète de votre serveur Linux.
