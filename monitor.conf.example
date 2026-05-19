@@ -18,4 +18,4 @@ OUTPUT_FORMAT="json"
 SSH_ALERT_THRESHOLD=5
 
 # URL du Webhook (Discord/Slack). Laissez vide pour désactiver les alertes réseaux.
-WEBHOOK_URL="https://discord.com/api/webhooks/1506240896407179334/sf8W5bjOSWxxgXUbC1jPTmIoSSihzog9fekHpzXcXtRKVC4wZDUFNYD7JY1ml9fXpmFs"
+WEBHOOK_URL="VOTRE_LIEN_DISCORD_ICI"
