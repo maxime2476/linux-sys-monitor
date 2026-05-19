@@ -34,3 +34,6 @@ MAX_PACKET_LOSS=20
 # Serveur d'exportation Web (Mode Pull pour Prometheus)
 ENABLE_WEB_SERVER="true"
 WEB_PORT="8080"
+
+# Fichiers critiques à surveiller (File Integrity Monitoring)
+FIM_TARGETS="/etc/passwd /etc/ssh/sshd_config"

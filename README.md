@@ -108,3 +108,6 @@ Si activé dans la configuration (`ENABLE_WEB_SERVER="true"`), vous pouvez requ�
 curl http://ip_du_serveur:8080/metrics.json
 \`\`\`
 *(Les écritures de l'état vers le serveur web sont atomiques, garantissant qu'aucune lecture corrompue ne peut survenir).*
+
+### File Integrity Monitoring (FIM)
+Le daemon embarque un moteur de détection d'intrusion basé sur l'hôte (HIDS). Au démarrage, il calcule les empreintes cryptographiques (SHA-256) des fichiers sensibles définis dans `FIM_TARGETS` (ex: `/etc/passwd`). Si une altération non autorisée est détectée durant le cycle d'exécution, une alerte critique de violation d'intégrité est levée.
