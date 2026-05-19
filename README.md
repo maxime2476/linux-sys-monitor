@@ -80,3 +80,6 @@ sudo logrotate -d /etc/logrotate.d/linux-sys-monitor
 
 ### Collecte robuste des métriques
 Pour garantir la stabilité du script indépendamment de la langue (locale) du système d'exploitation, la charge CPU n'est pas extraite via des utilitaires textuels de haut niveau, mais lue directement depuis le pseudo-système de fichiers du noyau (`/proc/loadavg`).
+
+### Export de données structurées (JSON)
+Pour faciliter l'ingestion des logs par des outils tiers (ELK, Datadog), le script supporte un mode d'export natif en JSON. Modifiez la variable `OUTPUT_FORMAT="json"` dans le fichier `monitor.conf` pour activer ce mode. Les données respecteront une structure stricte avec horodatage ISO 8601.
