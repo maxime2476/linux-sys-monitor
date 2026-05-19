@@ -37,3 +37,8 @@ WEB_PORT="8080"
 
 # Fichiers critiques à surveiller (File Integrity Monitoring)
 FIM_TARGETS="/etc/passwd /etc/ssh/sshd_config"
+
+# Noms de domaine à surveiller pour l'expiration SSL (séparés par un espace)
+SSL_DOMAINS="google.com github.com"
+# Seuil d'alerte en jours restants
+SSL_DAYS_THRESHOLD=15

@@ -114,3 +114,6 @@ Le daemon embarque un moteur de détection d'intrusion basé sur l'hôte (HIDS).
 
 ### Analyse Post-Mortem du Noyau (OOM-Killer)
 Pour contrer les fuites de mémoire furtives qui s'effondrent avant le cycle de vérification, le daemon analyse le tampon de messages du noyau (`dmesg`). Toute intervention de l'OOM-Killer (destruction d'un processus due à une saturation de la RAM) est immédiatement comptabilisée et signalée.
+
+### Anticipation d'expiration SSL/TLS
+La péremption d'un certificat HTTPS étant une cause majeure de panne de production, le daemon agit comme un client asynchrone. Il interroge via `openssl` les serveurs web définis dans `SSL_DOMAINS`. Il analyse l'empreinte cryptographique X.509 pour calculer la durée de vie restante du certificat. Une alerte réseau est déclenchée automatiquement si la limite (définie par `SSL_DAYS_THRESHOLD`) est franchie.

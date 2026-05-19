@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# Script de surveillance système - Version 5.0 (OOM-Killer & Post-Mortem)
+# Script de surveillance système - Version 6.0 (Anticipation SSL/TLS)
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,7 +17,6 @@ fi
 # INITIALISATION
 # ==============================================================================
 
-# 1. Baseline FIM
 declare -A FIM_BASELINE
 if [ -n "$FIM_TARGETS" ]; then
     for FILE in $FIM_TARGETS; do
@@ -25,7 +24,6 @@ if [ -n "$FIM_TARGETS" ]; then
     done
 fi
 
-# 2. Baseline OOM-Killer (Comptage des événements historiques du noyau)
 OOM_BASELINE=$(dmesg 2>/dev/null | grep -c -i "Out of memory")
 if [ -z "$OOM_BASELINE" ]; then OOM_BASELINE=0; fi
 
@@ -54,26 +52,42 @@ while true; do
             if [ -f "$FILE" ]; then
                 CURRENT_HASH=$(sha256sum "$FILE" | awk '{print $1}')
                 if [ "${FIM_BASELINE["$FILE"]}" != "$CURRENT_HASH" ]; then
-                    ALERT_FIM="true"
-                    FIM_MODIFIED_FILES="$FIM_MODIFIED_FILES $FILE"
+                    ALERT_FIM="true"; FIM_MODIFIED_FILES="$FIM_MODIFIED_FILES $FILE"
                 fi
             fi
         done
     fi
     FIM_MODIFIED_FILES=$(echo "$FIM_MODIFIED_FILES" | xargs)
 
-    # 4. Analyse Post-Mortem du Noyau (OOM-Killer)
+    # 4. Sécurité : Certificats SSL/TLS
+    ALERT_SSL="false"
+    SSL_EXPIRING_DOMAINS=""
+    if [ -n "$SSL_DOMAINS" ]; then
+        for DOMAIN in $SSL_DOMAINS; do
+            # Extraction asynchrone (timeout 5s) de la date d'expiration
+            EXP_DATE=$(echo | timeout 5 openssl s_client -servername "$DOMAIN" -connect "$DOMAIN:443" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+            if [ -n "$EXP_DATE" ]; then
+                EXP_SEC=$(date -d "$EXP_DATE" +%s 2>/dev/null)
+                NOW_SEC=$(date +%s)
+                if [ -n "$EXP_SEC" ]; then
+                    DAYS_LEFT=$(( (EXP_SEC - NOW_SEC) / 86400 ))
+                    if [ "$DAYS_LEFT" -le "$SSL_DAYS_THRESHOLD" ]; then
+                        ALERT_SSL="true"
+                        SSL_EXPIRING_DOMAINS="$SSL_EXPIRING_DOMAINS $DOMAIN(${DAYS_LEFT}j)"
+                    fi
+                fi
+            fi
+        done
+    fi
+    SSL_EXPIRING_DOMAINS=$(echo "$SSL_EXPIRING_DOMAINS" | xargs)
+
+    # 5. Noyau (OOM-Killer)
     ALERT_OOM="false"
     OOM_CURRENT=$(dmesg 2>/dev/null | grep -c -i "Out of memory")
     if [ -z "$OOM_CURRENT" ]; then OOM_CURRENT=0; fi
-    
-    if [ "$OOM_CURRENT" -gt "$OOM_BASELINE" ]; then
-        ALERT_OOM="true"
-        # Mise à jour de la baseline pour ne pas spammer les alertes au prochain cycle
-        OOM_BASELINE=$OOM_CURRENT
-    fi
+    if [ "$OOM_CURRENT" -gt "$OOM_BASELINE" ]; then ALERT_OOM="true"; OOM_BASELINE=$OOM_CURRENT; fi
 
-    # 5. Réseau
+    # 6. Réseau
     if [ -n "$PING_TARGET" ]; then
         PACKET_LOSS=$(ping -c 3 -W 2 "$PING_TARGET" 2>/dev/null | grep -o '[0-9]*% packet loss' | awk -F'%' '{print $1}')
         if [ -z "$PACKET_LOSS" ]; then PACKET_LOSS=100; fi
@@ -81,7 +95,7 @@ while true; do
         PACKET_LOSS=0
     fi
 
-    # 6. Auto-Guérison
+    # 7. Auto-Guérison
     HEALING_TRIGGERED="false"
     HEALING_SUCCESS="false"
     SERVICE_STATUS="unknown"
@@ -96,14 +110,14 @@ while true; do
         fi
     fi
 
-    # 7. Alertes de base
+    # 8. Alertes basiques
     ALERT_DISK="false"; ALERT_SSH="false"; ALERT_TEMP="false"; ALERT_NET="false"
     if [ "$DISK_PERCENT" -gt "$DISK_THRESHOLD" ]; then ALERT_DISK="true"; fi
     if [ "$SSH_FAILED" -ge "$SSH_ALERT_THRESHOLD" ]; then ALERT_SSH="true"; fi
     if [ "$CPU_TEMP" -gt 0 ] && [ "$CPU_TEMP" -ge "$TEMP_THRESHOLD" ]; then ALERT_TEMP="true"; fi
     if [ "$PACKET_LOSS" -ge "$MAX_PACKET_LOSS" ]; then ALERT_NET="true"; fi
 
-    # 8. Webhook
+    # 9. Webhook ChatOps
     if [ -n "$WEBHOOK_URL" ]; then
         MSG=""
         if [ "$ALERT_DISK" = "true" ] || [ "$ALERT_SSH" = "true" ] || [ "$ALERT_TEMP" = "true" ] || [ "$ALERT_NET" = "true" ]; then
@@ -111,8 +125,8 @@ while true; do
         fi
         
         if [ "$ALERT_FIM" = "true" ]; then MSG="$MSG\n☠️ **VIOLATION D'INTÉGRITÉ :** Fichier modifié : \`$FIM_MODIFIED_FILES\`"; fi
-        
-        if [ "$ALERT_OOM" = "true" ]; then MSG="$MSG\n💀 **FATAL KERNEL OOM :** La RAM a saturé et le noyau Linux a abattu un processus."; fi
+        if [ "$ALERT_OOM" = "true" ]; then MSG="$MSG\n💀 **FATAL KERNEL OOM :** Saturation RAM, processus abattu."; fi
+        if [ "$ALERT_SSL" = "true" ]; then MSG="$MSG\n🔐 **SÉCURITÉ SSL :** Certificat(s) expirant bientôt : \`$SSL_EXPIRING_DOMAINS\`"; fi
 
         if [ "$HEALING_TRIGGERED" = "true" ]; then
             if [ "$HEALING_SUCCESS" = "true" ]; then MSG="$MSG\n🛠️ **AUTO-GUÉRISON :** Le service \`$CRITICAL_SERVICE\` a été redémarré."; else MSG="$MSG\n🔥 **CRITIQUE :** Le service \`$CRITICAL_SERVICE\` a crashé."; fi
@@ -121,7 +135,7 @@ while true; do
         if [ -n "$MSG" ]; then curl -s -X POST -H "Content-Type: application/json" -d "{\"content\": \"$MSG\"}" "$WEBHOOK_URL" > /dev/null; fi
     fi
 
-    # 9. JSON Payload
+    # 10. Endpoint JSON
     JSON_PAYLOAD=$(cat <<EOF
 {
   "timestamp": "$DATE",
@@ -140,7 +154,9 @@ while true; do
     "security": {
       "ssh_failed_attempts": $SSH_FAILED,
       "fim_alert": $ALERT_FIM,
-      "fim_modified_files": "$FIM_MODIFIED_FILES"
+      "fim_modified_files": "$FIM_MODIFIED_FILES",
+      "ssl_alert": $ALERT_SSL,
+      "ssl_expiring": "$SSL_EXPIRING_DOMAINS"
     },
     "kernel": {
       "oom_killer_events": $OOM_CURRENT,
@@ -159,7 +175,8 @@ while true; do
     "cpu_overheat": $ALERT_TEMP,
     "network_degraded": $ALERT_NET,
     "file_integrity_compromised": $ALERT_FIM,
-    "kernel_oom_triggered": $ALERT_OOM
+    "kernel_oom_triggered": $ALERT_OOM,
+    "ssl_certificate_expiring": $ALERT_SSL
   }
 }
 EOF
@@ -178,7 +195,7 @@ EOF
         echo "$JSON_PAYLOAD" >> "$SCRIPT_DIR/$LOG_FILE"
     else
         echo "---------------------------------------------------" >> "$SCRIPT_DIR/$LOG_FILE"
-        echo "Rapport - $DATE | RAM:$RAM_USED MB | OOM_ALERT:$ALERT_OOM" >> "$SCRIPT_DIR/$LOG_FILE"
+        echo "Rapport - $DATE | RAM:$RAM_USED MB | SSL_ALERT:$ALERT_SSL" >> "$SCRIPT_DIR/$LOG_FILE"
     fi
 
     sleep "$CHECK_INTERVAL"
