@@ -17,14 +17,15 @@ Ce script est conçu pour offrir une surveillance basique sans avoir à déploye
    cd linux-sys-monitor
    \`\`\`
 
-2. Exécutez le script manuellement :
+2. Configuration :
+   Ouvrez le fichier `monitor.conf` pour ajuster le seuil d'alerte disque et le nom du fichier de log.
    \`\`\`bash
-   ./monitor.sh
+   nano monitor.conf
    \`\`\`
 
-3. Lisez les résultats dans le fichier généré :
+3. Exécutez le script manuellement :
    \`\`\`bash
-   cat system_health.log
+   ./monitor.sh
    \`\`\`
 
 ## Automatisation (Cron)
