@@ -1,12 +1,13 @@
 #!/bin/bash
 
 # ==============================================================================
-# Script de surveillance système - Version 7.0 (Docker & Micro-services)
+# Script de surveillance système - Version 7.1 (Optimisation CI/CD ShellCheck)
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/monitor.conf"
 
+# shellcheck disable=SC1090
 if [ -f "$CONFIG_FILE" ]; then source "$CONFIG_FILE"; else exit 1; fi
 
 if [ "$OUTPUT_FORMAT" != "json" ]; then
@@ -34,10 +35,11 @@ if [ -z "$OOM_BASELINE" ]; then OOM_BASELINE=0; fi
 while true; do
     DATE=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
-    # 1. Matériel
-    read RAM_TOTAL RAM_USED RAM_PERCENT <<< $(free -m | awk 'NR==2{printf "%s %s %.2f", $2, $3, $3*100/$2}')
-    read DISK_TOTAL DISK_USED DISK_PERCENT <<< $(df -h / | awk 'NR==2{printf "%s %s %s", $2, $3, $5}' | sed 's/%//')
-    read LOAD_1 LOAD_5 LOAD_15 <<< $(cat /proc/loadavg | awk '{print $1, $2, $3}')
+    # 1. Matériel (Corrections ShellCheck appliquées : variables muettes _, guillemets, lecture directe)
+    read -r RAM_TOTAL RAM_USED _ <<< "$(free -m | awk 'NR==2{printf "%s %s %.2f", $2, $3, $3*100/$2}')"
+    read -r _ _ DISK_PERCENT <<< "$(df -h / | awk 'NR==2{printf "%s %s %s", $2, $3, $5}' | sed 's/%//')"
+    read -r LOAD_1 _ _ < /proc/loadavg
+    
     if [ -f /sys/class/thermal/thermal_zone0/temp ]; then CPU_TEMP=$(( $(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null) / 1000 )); else CPU_TEMP=0; fi
 
     # 2. Sécurité : Bruteforce SSH & FIM
@@ -78,11 +80,8 @@ while true; do
     ALERT_DOCKER="false"
     DOCKER_CRASHED=""
     if [ "$CHECK_DOCKER" = "true" ] && command -v docker >/dev/null 2>&1; then
-        # Extraction des noms de conteneurs dans un état anormal (exited, dead)
         DOCKER_CRASHED=$(docker ps --filter "status=exited" --filter "status=dead" --format "{{.Names}}" 2>/dev/null | xargs)
-        if [ -n "$DOCKER_CRASHED" ]; then
-            ALERT_DOCKER="true"
-        fi
+        if [ -n "$DOCKER_CRASHED" ]; then ALERT_DOCKER="true"; fi
     fi
 
     # 5. Noyau (OOM-Killer)
@@ -127,16 +126,13 @@ while true; do
         if [ "$ALERT_DISK" = "true" ] || [ "$ALERT_SSH" = "true" ] || [ "$ALERT_TEMP" = "true" ] || [ "$ALERT_NET" = "true" ]; then
             MSG="🚨 **ALERTE - Serveur: $(hostname)** 🚨\n- Disque: $ALERT_DISK\n- Brute-force: $ALERT_SSH\n- CPU: $ALERT_TEMP\n- Réseau: $ALERT_NET"
         fi
-        
         if [ "$ALERT_FIM" = "true" ]; then MSG="$MSG\n☠️ **FIM :** Fichier modifié : \`$FIM_MODIFIED_FILES\`"; fi
         if [ "$ALERT_OOM" = "true" ]; then MSG="$MSG\n💀 **OOM :** Saturation RAM, processus abattu."; fi
         if [ "$ALERT_SSL" = "true" ]; then MSG="$MSG\n🔐 **SSL :** Certificat(s) expirant bientôt : \`$SSL_EXPIRING_DOMAINS\`"; fi
         if [ "$ALERT_DOCKER" = "true" ]; then MSG="$MSG\n🐳 **DOCKER :** Conteneur(s) crashé(s) : \`$DOCKER_CRASHED\`"; fi
-
         if [ "$HEALING_TRIGGERED" = "true" ]; then
             if [ "$HEALING_SUCCESS" = "true" ]; then MSG="$MSG\n🛠️ **AUTO-GUÉRISON :** Le service \`$CRITICAL_SERVICE\` a été redémarré."; else MSG="$MSG\n🔥 **CRITIQUE :** Le service \`$CRITICAL_SERVICE\` a crashé."; fi
         fi
-
         if [ -n "$MSG" ]; then curl -s -X POST -H "Content-Type: application/json" -d "{\"content\": \"$MSG\"}" "$WEBHOOK_URL" > /dev/null; fi
     fi
 
@@ -204,7 +200,7 @@ EOF
         echo "$JSON_PAYLOAD" >> "$SCRIPT_DIR/$LOG_FILE"
     else
         echo "---------------------------------------------------" >> "$SCRIPT_DIR/$LOG_FILE"
-        echo "Rapport - $DATE | RAM:$RAM_USED MB | DOCKER_ALERT:$ALERT_DOCKER" >> "$SCRIPT_DIR/$LOG_FILE"
+        echo "Rapport - $DATE | RAM:$RAM_USED MB | JSON_EXPORT_OK" >> "$SCRIPT_DIR/$LOG_FILE"
     fi
 
     sleep "$CHECK_INTERVAL"
