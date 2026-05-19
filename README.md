@@ -52,6 +52,8 @@ flowchart TD
     Script -->|Écriture Atomique JSON| WebServ
     WebServ <-.->|Requêtes HTTP GET| Prometheus
 
+```
+
 ## Installation et Usage
 
 1. Clonez le dépôt :
