@@ -34,6 +34,31 @@ Pour automatiser ce script afin qu'il s'exécute toutes les heures, ajoutez cett
 0 * * * * /chemin/absolu/vers/linux-sys-monitor/monitor.sh
 \`\`\`
 
+## Installation en tant que Service (Systemd)
+
+Pour que le script tourne en continu en tâche de fond et survive aux redémarrages du serveur :
+
+1. Créez un lien symbolique de l'unité systemd vers le système :
+   \`\`\`bash
+   sudo ln -s /home/maxime/linux-sys-monitor/linux-sys-monitor.service /etc/systemd/system/
+   \`\`\`
+
+2. Rechargez les configurations systemd :
+   \`\`\`bash
+   sudo systemctl daemon-reload
+   \`\`\`
+
+3. Activez (démarrage automatique) et lancez le service :
+   \`\`\`bash
+   sudo systemctl enable linux-sys-monitor.service
+   sudo systemctl start linux-sys-monitor.service
+   \`\`\`
+
+4. Vérifiez l'état du service :
+   \`\`\`bash
+   sudo systemctl status linux-sys-monitor.service
+   \`\`\`
+
 ## Fonctionnalités avancées
 
 ### Gestion des alertes
