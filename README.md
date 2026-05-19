@@ -1,3 +1,5 @@
+![ShellCheck](https://github.com/maxime2476/linux-sys-monitor/actions/workflows/shellcheck.yml/badge.svg)
+
 # Linux System Monitor
 
 Un outil en ligne de commande léger (Bash) pour surveiller la santé d'un système Linux. Il enregistre l'utilisation de la RAM, du disque et la charge CPU dans un fichier journal.
