@@ -32,6 +32,8 @@ if [ -z "$OOM_BASELINE" ]; then OOM_BASELINE=0; fi
 # BOUCLE PRINCIPALE
 # ==============================================================================
 
+LAST_ALERT_TIME=0
+
 while true; do
     DATE=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
@@ -121,6 +123,15 @@ while true; do
     if [ "$PACKET_LOSS" -ge "$MAX_PACKET_LOSS" ]; then ALERT_NET="true"; fi
 
     # 9. Webhook ChatOps
+    if [ -n "$MSG" ]; then
+        CURRENT_TIME=$(date +%s)
+        # N'envoyer une alerte que si la dernière a plus de 5 minutes (300 secondes)
+        if [ $((CURRENT_TIME - LAST_ALERT_TIME)) -gt 300 ]; then
+            curl -s -X POST -H "Content-Type: application/json" -d "{\"content\": \"$MSG\"}" "$WEBHOOK_URL" > /dev/null
+            LAST_ALERT_TIME=$CURRENT_TIME
+        fi
+    fi
+
     if [ -n "$WEBHOOK_URL" ]; then
         MSG=""
         if [ "$ALERT_DISK" = "true" ] || [ "$ALERT_SSH" = "true" ] || [ "$ALERT_TEMP" = "true" ] || [ "$ALERT_NET" = "true" ]; then
