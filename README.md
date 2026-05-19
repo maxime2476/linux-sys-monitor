@@ -50,7 +50,7 @@ flowchart TD
     %% Export des données
     Script -->|Génération| LogFile
     Script -->|Écriture Atomique JSON| WebServ
-    WebServ <-.->|Requêtes HTTP GET| Prometheus```
+    WebServ <-.->|Requêtes HTTP GET| Prometheus
 
 ## Installation et Usage
 
