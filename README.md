@@ -54,55 +54,62 @@ flowchart TD
 
 ```
 
-## Installation et Usage
+## 🚀 Installation et Usage
+
+L'installation est automatisée via un Makefile :
 
 1. Clonez le dépôt :
-   \`\`\`bash
-   git clone https://github.com/VOTRE_NOM/linux-sys-monitor.git
+   ```bash
+   git clone [https://github.com/maxime2476/linux-sys-monitor.git](https://github.com/maxime2476/linux-sys-monitor.git)
    cd linux-sys-monitor
-   \`\`\`
+   ```
 
-2. Configuration :
-   Ouvrez le fichier `monitor.conf` pour ajuster le seuil d'alerte disque et le nom du fichier de log.
-   \`\`\`bash
-   nano monitor.conf
-   \`\`\`
+2. Installez le service :
+   ```bash
+   sudo make install
+   ```
 
-3. Exécutez le script manuellement :
-   \`\`\`bash
-   ./monitor.sh
-   \`\`\`
+3. Commandes utiles :
+   Redémarrer le service :
+   	```bash
+   	sudo make restart
+   	```
+	
+   Désinstaller le service :
+	```bash
+        sudo make uninstall
+        ```
 
 ## Automatisation (Cron)
 Pour automatiser ce script afin qu'il s'exécute toutes les heures, ajoutez cette ligne à votre crontab (`crontab -e`) :
-\`\`\`bash
+```bash
 0 * * * * /chemin/absolu/vers/linux-sys-monitor/monitor.sh
-\`\`\`
+```
 
 ## Installation en tant que Service (Systemd)
 
 Pour que le script tourne en continu en tâche de fond et survive aux redémarrages du serveur :
 
 1. Créez un lien symbolique de l'unité systemd vers le système :
-   \`\`\`bash
+   ```bash
    sudo ln -s /home/maxime/linux-sys-monitor/linux-sys-monitor.service /etc/systemd/system/
-   \`\`\`
+   ```
 
 2. Rechargez les configurations systemd :
-   \`\`\`bash
+   ```bash
    sudo systemctl daemon-reload
-   \`\`\`
+   ```
 
 3. Activez (démarrage automatique) et lancez le service :
-   \`\`\`bash
+   ```bash
    sudo systemctl enable linux-sys-monitor.service
    sudo systemctl start linux-sys-monitor.service
-   \`\`\`
+   ```
 
 4. Vérifiez l'état du service :
-   \`\`\`bash
+   ```bash
    sudo systemctl status linux-sys-monitor.service
-   \`\`\`
+   ```
 
 ## Fonctionnalités avancées
 
@@ -114,14 +121,14 @@ Cela permet de repérer instantanément les anomalies lors de l'analyse des jour
 Pour éviter que le fichier `system_health.log` ne sature l'espace disque, un fichier de configuration `logrotate` est fourni. Il archive les données chaque semaine et conserve un mois d'historique compressé.
 
 Pour l'activer sur votre système, copiez (ou liez) le fichier de configuration dans le répertoire système de logrotate :
-\`\`\`bash
+```bash
 sudo cp linux-sys-monitor.logrotate /etc/logrotate.d/linux-sys-monitor
 sudo chown root:root /etc/logrotate.d/linux-sys-monitor
-\`\`\`
+```
 Vous pouvez tester la configuration manuellement (sans l'exécuter) avec :
-\`\`\`bash
+```bash
 sudo logrotate -d /etc/logrotate.d/linux-sys-monitor
-\`\`\`
+```
 
 ### Collecte robuste des métriques
 Pour garantir la stabilité du script indépendamment de la langue (locale) du système d'exploitation, la charge CPU n'est pas extraite via des utilitaires textuels de haut niveau, mais lue directement depuis le pseudo-système de fichiers du noyau (`/proc/loadavg`).
@@ -149,9 +156,9 @@ Vérifie la santé de la connectivité sortante du serveur en effectuant des req
 ### Point d'accès HTTP (Mode Pull / Architecture Prometheus)
 Pour une intégration native avec les systèmes de supervision modernes (Prometheus, Datadog), le script agit comme un *Node Exporter*. Il expose l'état en temps réel du système sur un serveur web local embarqué.
 Si activé dans la configuration (`ENABLE_WEB_SERVER="true"`), vous pouvez requêter les données depuis n'importe quelle machine du réseau :
-\`\`\`bash
+```bash
 curl http://ip_du_serveur:8080/metrics.json
-\`\`\`
+```
 *(Les écritures de l'état vers le serveur web sont atomiques, garantissant qu'aucune lecture corrompue ne peut survenir).*
 
 ### File Integrity Monitoring (FIM)
