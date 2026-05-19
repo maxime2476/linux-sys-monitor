@@ -21,3 +21,6 @@ SSH_ALERT_THRESHOLD=5
 WEBHOOK_URL="VOTRE_LIEN_DISCORD_ICI"
 
 CRITICAL_SERVICE="nom_du_service_ici"
+
+# Température critique du CPU en degrés Celsius
+TEMP_THRESHOLD=75

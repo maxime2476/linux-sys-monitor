@@ -94,3 +94,6 @@ Pour activer cette fonctionnalité, générez un Webhook depuis votre plateforme
 ### Auto-Guérison (Self-Healing)
 Le script n'est plus seulement passif. Si un service critique (défini via la variable `CRITICAL_SERVICE` dans la configuration) cesse de fonctionner, le daemon tentera de le redémarrer automatiquement via `systemctl` avant d'émettre un rapport de statut via Webhook. L'intervention humaine est ainsi réduite.
 *(Note : Cette fonctionnalité requiert que le service s'exécute avec les droits root).*
+
+### Surveillance Thermique (Hardware)
+Conçu pour les serveurs Bare-Metal et les nano-ordinateurs (ex: Raspberry Pi), le script lit les capteurs du système de fichiers virtuel (`/sys/class/thermal`) pour surveiller la température matérielle du processeur et alerter en cas de risque de thermal throttling.

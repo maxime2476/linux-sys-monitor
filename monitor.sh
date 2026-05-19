@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# Script de surveillance système - Version 2.0 (Self-Healing)
+# Script de surveillance système - Version 2.1 (Surveillance Thermique)
 # ==============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -15,13 +15,13 @@ else
 fi
 
 if [ "$OUTPUT_FORMAT" != "json" ]; then
-    echo "Démarrage du service de surveillance avec auto-guérison..." >> "$SCRIPT_DIR/$LOG_FILE"
+    echo "Démarrage du service de surveillance..." >> "$SCRIPT_DIR/$LOG_FILE"
 fi
 
 while true; do
     DATE=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
-    # Extraction des données
+    # Extraction des données classiques
     read RAM_TOTAL RAM_USED RAM_PERCENT <<< $(free -m | awk 'NR==2{printf "%s %s %.2f", $2, $3, $3*100/$2}')
     read DISK_TOTAL DISK_USED DISK_PERCENT <<< $(df -h / | awk 'NR==2{printf "%s %s %s", $2, $3, $5}' | sed 's/%//')
     read LOAD_1 LOAD_5 LOAD_15 <<< $(cat /proc/loadavg | awk '{print $1, $2, $3}')
@@ -29,20 +29,23 @@ while true; do
     SSH_FAILED=$(grep -c "Failed password" /var/log/auth.log 2>/dev/null)
     if [ -z "$SSH_FAILED" ]; then SSH_FAILED=0; fi
 
-    # Logique d'Auto-Guérison (Self-Healing)
+    # Extraction de la température CPU (gestion des environnements virtualisés comme WSL)
+    if [ -f /sys/class/thermal/thermal_zone0/temp ]; then
+        CPU_TEMP=$(( $(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null) / 1000 ))
+    else
+        CPU_TEMP=0 # Capteur indisponible
+    fi
+
+    # Logique d'Auto-Guérison
     HEALING_TRIGGERED="false"
     HEALING_SUCCESS="false"
     SERVICE_STATUS="unknown"
     
     if [ -n "$CRITICAL_SERVICE" ]; then
         SERVICE_STATUS=$(systemctl is-active "$CRITICAL_SERVICE" 2>/dev/null)
-        
         if [ "$SERVICE_STATUS" != "active" ] && [ "$SERVICE_STATUS" != "unknown" ]; then
             HEALING_TRIGGERED="true"
-            # Tentative de redémarrage (le script tourne en root désormais)
             systemctl restart "$CRITICAL_SERVICE"
-            
-            # Vérification post-redémarrage
             NEW_STATUS=$(systemctl is-active "$CRITICAL_SERVICE" 2>/dev/null)
             if [ "$NEW_STATUS" = "active" ]; then
                 HEALING_SUCCESS="true"
@@ -56,22 +59,24 @@ while true; do
     # Gestion des alertes
     ALERT_DISK="false"
     ALERT_SSH="false"
+    ALERT_TEMP="false"
     
     if [ "$DISK_PERCENT" -gt "$DISK_THRESHOLD" ]; then ALERT_DISK="true"; fi
     if [ "$SSH_FAILED" -ge "$SSH_ALERT_THRESHOLD" ]; then ALERT_SSH="true"; fi
+    if [ "$CPU_TEMP" -gt 0 ] && [ "$CPU_TEMP" -ge "$TEMP_THRESHOLD" ]; then ALERT_TEMP="true"; fi
 
-    # Notification Réseau (Webhook) - Mise à jour avec le Self-Healing
+    # Notification Réseau (Webhook)
     if [ -n "$WEBHOOK_URL" ]; then
         MSG=""
-        if [ "$ALERT_DISK" = "true" ] || [ "$ALERT_SSH" = "true" ]; then
-            MSG="🚨 **ALERTE - Serveur: $(hostname)** 🚨\n- Disque: $ALERT_DISK\n- Brute-force: $ALERT_SSH"
+        if [ "$ALERT_DISK" = "true" ] || [ "$ALERT_SSH" = "true" ] || [ "$ALERT_TEMP" = "true" ]; then
+            MSG="🚨 **ALERTE - Serveur: $(hostname)** 🚨\n- Disque: $ALERT_DISK\n- Brute-force: $ALERT_SSH\n- Surchauffe CPU: $ALERT_TEMP (${CPU_TEMP}°C)"
         fi
         
         if [ "$HEALING_TRIGGERED" = "true" ]; then
             if [ "$HEALING_SUCCESS" = "true" ]; then
-                MSG="$MSG\n🛠️ **AUTO-GUÉRISON :** Le service \`$CRITICAL_SERVICE\` a crashé mais a été redémarré avec succès par le script."
+                MSG="$MSG\n🛠️ **AUTO-GUÉRISON :** Le service \`$CRITICAL_SERVICE\` a été redémarré avec succès."
             else
-                MSG="$MSG\n🔥 **ALERTE CRITIQUE :** Le service \`$CRITICAL_SERVICE\` a crashé et le redémarrage automatique a ÉCHOUÉ."
+                MSG="$MSG\n🔥 **ALERTE CRITIQUE :** Le service \`$CRITICAL_SERVICE\` a crashé (Redémarrage automatique ÉCHOUÉ)."
             fi
         fi
 
@@ -90,7 +95,8 @@ while true; do
       "ram_used_mb": $RAM_USED,
       "ram_total_mb": $RAM_TOTAL,
       "disk_percent": $DISK_PERCENT,
-      "cpu_load_1m": $LOAD_1
+      "cpu_load_1m": $LOAD_1,
+      "cpu_temp_c": $CPU_TEMP
     },
     "security": {
       "ssh_failed_attempts": $SSH_FAILED
@@ -104,7 +110,8 @@ while true; do
   },
   "alerts": {
     "disk_critical": $ALERT_DISK,
-    "ssh_bruteforce": $ALERT_SSH
+    "ssh_bruteforce": $ALERT_SSH,
+    "cpu_overheat": $ALERT_TEMP
   }
 }
 EOF
@@ -117,6 +124,7 @@ EOF
         echo "   RAM    : $RAM_USED MB / $RAM_TOTAL MB" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "   Disque : $DISK_PERCENT%" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "   Charge : $LOAD_1" >> "$SCRIPT_DIR/$LOG_FILE"
+        echo "   Temp CPU: $CPU_TEMP °C" >> "$SCRIPT_DIR/$LOG_FILE"
         echo "   Sécurité: $SSH_FAILED tentatives SSH" >> "$SCRIPT_DIR/$LOG_FILE"
         if [ -n "$CRITICAL_SERVICE" ]; then
             echo "   Service ($CRITICAL_SERVICE) : $SERVICE_STATUS" >> "$SCRIPT_DIR/$LOG_FILE"
