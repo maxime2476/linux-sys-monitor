@@ -42,3 +42,6 @@ FIM_TARGETS="/etc/passwd /etc/ssh/sshd_config"
 SSL_DOMAINS="google.com github.com"
 # Seuil d'alerte en jours restants
 SSL_DAYS_THRESHOLD=15
+
+# Activer la surveillance des conteneurs Docker (true/false)
+CHECK_DOCKER="true"

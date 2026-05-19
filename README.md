@@ -117,3 +117,6 @@ Pour contrer les fuites de mémoire furtives qui s'effondrent avant le cycle de 
 
 ### Anticipation d'expiration SSL/TLS
 La péremption d'un certificat HTTPS étant une cause majeure de panne de production, le daemon agit comme un client asynchrone. Il interroge via `openssl` les serveurs web définis dans `SSL_DOMAINS`. Il analyse l'empreinte cryptographique X.509 pour calculer la durée de vie restante du certificat. Une alerte réseau est déclenchée automatiquement si la limite (définie par `SSL_DAYS_THRESHOLD`) est franchie.
+
+### Observabilité des Micro-services (Docker)
+L'outil s'intègre avec les environnements conteneurisés. S'il détecte la présence du démon Docker (`CHECK_DOCKER="true"`), il interroge l'API locale pour identifier les conteneurs qui ont quitté inopinément ou qui sont dans un état "dead". Les noms des conteneurs impactés sont directement remontés dans la charge utile JSON et via les Webhooks ChatOps.
